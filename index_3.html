@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carnet Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --indigo:#1B2A4A;
+    --indigo-deep:#10192E;
+    --paper:#FAF6EC;
+    --paper-line:#E3DCC8;
+    --gold:#C89B3C;
+    --gold-deep:#8A6B24;
+    --rouge:#B33F3F;
+    --vert:#3F7A5C;
+    --ink:#241F14;
+    --ink-soft:#6B6455;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;justify-content:center;}
+  #app{width:100%;max-width:440px;min-height:100vh;background:var(--paper);position:relative;display:flex;flex-direction:column;}
+  .hidden{display:none !important;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;}
+  input, textarea{font-family:inherit;}
+
+  /* ---- Auth ---- */
+  #auth{flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 28px;background:var(--indigo);color:#fff;}
+  #auth .eyebrow{font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:8px;}
+  #auth h1{font-family:'Fraunces',serif;font-size:30px;font-weight:600;line-height:1.15;margin-bottom:10px;}
+  #auth p{color:#C9D0DE;font-size:14px;line-height:1.5;margin-bottom:24px;}
+  #auth label{font-size:13px;color:#C9D0DE;display:block;margin-bottom:6px;}
+  #auth input{width:100%;padding:14px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:16px;margin-bottom:16px;}
+  #auth input::placeholder{color:#8892A6;}
+  .btn-primary{background:var(--gold);color:var(--indigo-deep);font-weight:700;font-size:15px;padding:15px;border-radius:10px;width:100%;text-align:center;}
+  .btn-primary:active{transform:scale(0.98);}
+  .btn-primary:disabled{opacity:0.6;}
+  .switch-mode{text-align:center;margin-top:18px;font-size:13px;color:#C9D0DE;}
+  .switch-mode button{color:var(--gold);font-weight:600;text-decoration:underline;}
+  .auth-error{background:rgba(179,63,63,0.2);border:1px solid var(--rouge);color:#F6C9C9;font-size:13px;padding:10px 12px;border-radius:8px;margin-bottom:16px;}
+
+  /* ---- Dashboard (identique au prototype) ---- */
+  #dashboard{flex:1;display:flex;flex-direction:column;}
+  header.top{background:var(--indigo);color:#fff;padding:22px 20px 26px;border-radius:0 0 20px 20px;}
+  header.top .row{display:flex;justify-content:space-between;align-items:flex-start;}
+  header.top .shopname{font-size:13px;color:#B7C0D6;font-weight:500;letter-spacing:0.02em;}
+  header.top .stamp{font-size:11px;color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:3px 10px;font-weight:600;background:none;}
+  .total-block{margin-top:16px;}
+  .total-label{font-size:12px;color:#B7C0D6;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}
+  .total-amount{font-family:'Fraunces',serif;font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .total-sub{font-size:12px;color:#94A0BC;margin-top:2px;}
+  #searchwrap{padding:16px 20px 8px;}
+  #searchwrap input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--paper-line);background:#fff;font-size:14px;}
+  #clientlist{flex:1;overflow-y:auto;padding:4px 20px 100px;}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--ink-soft);}
+  .empty-state h3{font-family:'Fraunces',serif;font-size:18px;color:var(--ink);margin-bottom:6px;font-weight:600;}
+  .empty-state p{font-size:13px;line-height:1.5;}
+  .client-row{display:flex;align-items:center;justify-content:space-between;padding:14px 4px;border-bottom:1px solid var(--paper-line);}
+  .client-row:active{background:rgba(0,0,0,0.02);}
+  .client-info{display:flex;align-items:center;gap:12px;}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;font-family:'Fraunces',serif;flex-shrink:0;}
+  .client-name{font-size:15px;font-weight:600;color:var(--ink);}
+  .client-phone{font-size:12px;color:var(--ink-soft);margin-top:1px;}
+  .client-amount{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;}
+  .client-amount.due{color:var(--rouge);}
+  .client-amount.clear{color:var(--vert);}
+  .client-meta{font-size:11px;color:var(--ink-soft);margin-top:2px;text-align:right;}
+  .fab{position:absolute;bottom:24px;right:24px;width:58px;height:58px;border-radius:50%;background:var(--gold);color:var(--indigo-deep);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 14px rgba(0,0,0,0.25);}
+  .fab:active{transform:scale(0.95);}
+  .logout-link{font-size:11px;color:#94A0BC;text-decoration:underline;margin-top:8px;display:inline-block;}
+
+  /* ---- Modal ---- */
+  .modal-overlay{position:absolute;inset:0;background:rgba(16,25,46,0.55);display:flex;align-items:flex-end;z-index:20;}
+  .modal-sheet{background:var(--paper);width:100%;border-radius:20px 20px 0 0;padding:22px 20px 28px;max-height:88vh;overflow-y:auto;}
+  .modal-handle{width:36px;height:4px;background:var(--paper-line);border-radius:4px;margin:0 auto 16px;}
+  .modal-title{font-family:'Fraunces',serif;font-size:20px;font-weight:600;margin-bottom:16px;}
+  .field{margin-bottom:14px;}
+  .field label{font-size:12px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:6px;}
+  .field input, .field textarea{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--paper-line);background:#fff;font-size:15px;}
+  .field textarea{resize:none;min-height:60px;}
+  .btn-row{display:flex;gap:10px;margin-top:18px;}
+  .btn-ghost{flex:1;padding:14px;border-radius:10px;border:1px solid var(--paper-line);color:var(--ink-soft);font-weight:600;font-size:14px;text-align:center;}
+  .btn-row .btn-primary{flex:2;}
+  .existing-client-pick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .pick-chip{padding:8px 12px;border-radius:20px;border:1px solid var(--paper-line);font-size:13px;background:#fff;}
+  .pick-chip.active{background:var(--indigo);color:#fff;border-color:var(--indigo);}
+  .detail-header{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+  .detail-total{font-family:'Fraunces',serif;font-size:30px;font-weight:600;margin:14px 0 4px;font-variant-numeric:tabular-nums;}
+  .detail-total.clear{color:var(--vert);}
+  .detail-total.due{color:var(--rouge);}
+  .debt-list{margin-top:16px;border-top:1px solid var(--paper-line);}
+  .debt-item{padding:12px 0;border-bottom:1px solid var(--paper-line);display:flex;justify-content:space-between;align-items:center;}
+  .debt-item .d-left{flex:1;}
+  .debt-date{font-size:11px;color:var(--ink-soft);margin-bottom:2px;}
+  .debt-note{font-size:13px;color:var(--ink);}
+  .debt-amount{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;margin-right:10px;}
+  .stamp-paid{font-size:10px;font-weight:700;color:var(--vert);border:1px solid var(--vert);border-radius:4px;padding:2px 6px;text-transform:uppercase;letter-spacing:0.04em;transform:rotate(-4deg);display:inline-block;}
+  .btn-mark{font-size:12px;font-weight:600;color:var(--indigo);border:1px solid var(--indigo);border-radius:8px;padding:6px 10px;white-space:nowrap;}
+  .toast{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:var(--indigo-deep);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:40;opacity:0;transition:opacity 0.2s;}
+  .toast.show{opacity:1;}
+  #loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--ink-soft);font-size:13px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="loading">Chargement...</div>
+
+  <div id="auth" class="hidden">
+    <div class="eyebrow">Bienvenue</div>
+    <h1 id="authTitle">Connecte-toi a ton carnet</h1>
+    <p id="authSubtitle">Entre ton numero et ton code pour continuer.</p>
+    <div id="authError" class="auth-error hidden"></div>
+    <div id="signupOnlyField">
+      <label for="boutiqueNameInput">Nom de la boutique</label>
+      <input id="boutiqueNameInput" type="text" placeholder="Ex: Boutique Fallou">
+    </div>
+    <label for="phoneInput">Numero de telephone</label>
+    <input id="phoneInput" type="tel" placeholder="77 123 45 67">
+    <label for="pinInput">Code PIN (6 chiffres)</label>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="******">
+    <button class="btn-primary" id="authSubmitBtn">Se connecter</button>
+    <div class="switch-mode">
+      <span id="switchText">Pas encore de compte ?</span>
+      <button id="switchModeBtn">Creer un compte</button>
+    </div>
+  </div>
+
+  <div id="dashboard" class="hidden">
+    <header class="top">
+      <div class="row">
+        <div>
+          <div class="shopname" id="shopNameLabel">Ma boutique</div>
+          <a class="logout-link" id="logoutBtn">Se deconnecter</a>
+        </div>
+        <div class="stamp">CARNET</div>
+      </div>
+      <div class="total-block">
+        <div class="total-label">Total a recouvrer</div>
+        <div class="total-amount" id="totalAmount">0 F</div>
+        <div class="total-sub" id="totalSub">0 client</div>
+      </div>
+    </header>
+    <div id="searchwrap"><input type="text" id="searchInput" placeholder="Rechercher un client"></div>
+    <div id="clientlist"></div>
+    <button class="fab" id="addBtn" aria-label="Ajouter une dette">+</button>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+/* ============================================================
+   CONFIGURATION - remplace ces deux valeurs par les tiennes
+   Supabase > Settings > API > Project URL / anon public key
+   ============================================================ */
+const SUPABASE_URL = "https://vwrsqqlbarpevnnvxvxb.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_vtLZtmZX0Wumo2C0iI_vXw_aIIvfsVr";
+const EMAIL_DOMAIN = "@carnetdigital.app";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let profile = null;
+let clients = [];
+let debts = [];
+let authMode = 'login';
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function fmt(n){ return Math.round(n).toLocaleString('fr-FR') + ' F'; }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function initials(name){
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0]||'') + (parts[1]?.[0]||'')).toUpperCase();
+}
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatDate(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('fr-FR', {day:'2-digit', month:'short'});
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function phoneToEmail(phone){
+  return phone.replace(/\s+/g,'') + EMAIL_DOMAIN;
+}
+
+/* ---- Auth ---- */
+function setAuthMode(mode){
+  authMode = mode;
+  const isSignup = mode === 'signup';
+  document.getElementById('authTitle').textContent = isSignup ? 'Cree ton carnet' : 'Connecte-toi a ton carnet';
+  document.getElementById('authSubtitle').textContent = isSignup ? 'Un compte par boutique, protege par ton code PIN.' : 'Entre ton numero et ton code pour continuer.';
+  document.getElementById('signupOnlyField').classList.toggle('hidden', !isSignup);
+  document.getElementById('authSubmitBtn').textContent = isSignup ? 'Creer mon compte' : 'Se connecter';
+  document.getElementById('switchText').textContent = isSignup ? 'Deja un compte ?' : 'Pas encore de compte ?';
+  document.getElementById('switchModeBtn').textContent = isSignup ? 'Se connecter' : 'Creer un compte';
+  document.getElementById('authError').classList.add('hidden');
+}
+
+function showAuthError(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+async function handleAuthSubmit(){
+  const phone = document.getElementById('phoneInput').value.trim();
+  const pin = document.getElementById('pinInput').value.trim();
+  const boutiqueName = document.getElementById('boutiqueNameInput').value.trim();
+
+  if(!phone){ showAuthError('Entre ton numero de telephone.'); return; }
+  if(!/^\d{6}$/.test(pin)){ showAuthError('Le code PIN doit contenir exactement 6 chiffres.'); return; }
+  if(authMode === 'signup' && !boutiqueName){ showAuthError('Entre le nom de ta boutique.'); return; }
+
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = true;
+  const email = phoneToEmail(phone);
+
+  try{
+    if(authMode === 'signup'){
+      const { data, error } = await sb.auth.signUp({ email, password: pin });
+      if(error) throw error;
+      const userId = data.user.id;
+      const { error: profileError } = await sb.from('profiles').insert({
+        id: userId, boutique_name: boutiqueName, phone
+      });
+      if(profileError) throw profileError;
+      showToast('Compte cree');
+      await loadEverything();
+    }else{
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: pin });
+      if(error) throw error;
+      showToast('Bienvenue');
+      await loadEverything();
+    }
+  }catch(e){
+    showAuthError(e.message.includes('Invalid login') ? 'Numero ou code PIN incorrect.' : e.message);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+async function handleLogout(){
+  await sb.auth.signOut();
+  currentUser = null; profile = null; clients = []; debts = [];
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('auth').classList.remove('hidden');
+}
+
+/* ---- Data loading ---- */
+async function loadEverything(){
+  const { data: { user } } = await sb.auth.getUser();
+  if(!user){ document.getElementById('auth').classList.remove('hidden'); return; }
+  currentUser = user;
+
+  const { data: profileData } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  profile = profileData;
+
+  const { data: clientsData } = await sb.from('clients').select('*').eq('boutique_id', user.id);
+  clients = clientsData || [];
+
+  const { data: debtsData } = await sb.from('debts').select('*').eq('boutique_id', user.id);
+  debts = debtsData || [];
+
+  document.getElementById('auth').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  renderDashboard();
+}
+
+function clientBalance(clientId){
+  return debts.filter(d=>d.client_id===clientId).reduce((s,d)=>s+Number(d.remaining),0);
+}
+function lastActivity(clientId){
+  const list = debts.filter(d=>d.client_id===clientId);
+  if(!list.length) return null;
+  return list.reduce((a,b)=> a.date > b.date ? a : b).date;
+}
+
+function renderDashboard(){
+  document.getElementById('shopNameLabel').textContent = profile.boutique_name;
+  const total = debts.reduce((s,d)=>s+Number(d.remaining),0);
+  document.getElementById('totalAmount').textContent = fmt(total);
+  const activeClients = clients.filter(c=>clientBalance(c.id) > 0).length;
+  document.getElementById('totalSub').textContent = activeClients + (activeClients>1 ? ' clients doivent' : ' client doit');
+
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+  const list = document.getElementById('clientlist');
+  list.innerHTML = '';
+
+  let list_ = [...clients];
+  if(query){
+    list_ = list_.filter(c=>c.name.toLowerCase().includes(query) || (c.phone||'').includes(query));
+  }
+  list_.sort((a,b)=> clientBalance(b.id) - clientBalance(a.id));
+
+  if(list_.length === 0){
+    list.innerHTML = `<div class="empty-state">
+      <h3>${query ? 'Aucun resultat' : 'Aucun client encore'}</h3>
+      <p>${query ? 'Essaie un autre nom.' : 'Appuie sur + pour enregistrer ta premiere dette.'}</p>
+    </div>`;
+    return;
+  }
+
+  list_.forEach(c=>{
+    const bal = clientBalance(c.id);
+    const la = lastActivity(c.id);
+    const row = document.createElement('div');
+    row.className = 'client-row';
+    row.innerHTML = `
+      <div class="client-info">
+        <div class="avatar">${initials(c.name)}</div>
+        <div>
+          <div class="client-name">${escapeHtml(c.name)}</div>
+          <div class="client-phone">${c.phone ? escapeHtml(c.phone) : 'Sans numero'}</div>
+        </div>
+      </div>
+      <div>
+        <div class="client-amount ${bal>0?'due':'clear'}">${bal>0?fmt(bal):'Solde'}</div>
+        <div class="client-meta">${la ? 'Le ' + formatDate(la) : ''}</div>
+      </div>
+    `;
+    row.addEventListener('click', ()=>openClientDetail(c.id));
+    list.appendChild(row);
+  });
+}
+
+/* ---- Add debt modal ---- */
+function openAddDebtModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Nouvelle dette</div>
+        <div class="field">
+          <label>Client existant (optionnel)</label>
+          <div class="existing-client-pick" id="chipList"></div>
+        </div>
+        <div class="field"><label>Nom du client</label><input type="text" id="clientNameInput" placeholder="Ex: Awa Diop"></div>
+        <div class="field"><label>Telephone (optionnel)</label><input type="tel" id="clientPhoneInput" placeholder="77 123 45 67"></div>
+        <div class="field"><label>Montant de la dette</label><input type="number" inputmode="numeric" id="amountInput" placeholder="5000"></div>
+        <div class="field"><label>Note (optionnel)</label><textarea id="noteInput" placeholder="Ex: riz + huile"></textarea></div>
+        <div class="btn-row">
+          <button class="btn-ghost" id="cancelAdd">Annuler</button>
+          <button class="btn-primary" id="confirmAdd">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  let selectedClientId = null;
+  const chipList = document.getElementById('chipList');
+  if(clients.length === 0){
+    chipList.innerHTML = '<span style="font-size:12px;color:var(--ink-soft);">Aucun client encore, remplis le nom ci-dessous.</span>';
+  }else{
+    clients.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
+      const chip = document.createElement('button');
+      chip.className = 'pick-chip';
+      chip.textContent = c.name;
+      chip.addEventListener('click', ()=>{
+        selectedClientId = (selectedClientId === c.id) ? null : c.id;
+        document.querySelectorAll('.pick-chip').forEach(el=>el.classList.remove('active'));
+        if(selectedClientId){
+          chip.classList.add('active');
+          document.getElementById('clientNameInput').value = c.name;
+          document.getElementById('clientPhoneInput').value = c.phone || '';
+        }else{
+          document.getElementById('clientNameInput').value = '';
+          document.getElementById('clientPhoneInput').value = '';
+        }
+      });
+      chipList.appendChild(chip);
+    });
+  }
+
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('cancelAdd').addEventListener('click', closeModal);
+
+  document.getElementById('confirmAdd').addEventListener('click', async ()=>{
+    const name = document.getElementById('clientNameInput').value.trim();
+    const phone = document.getElementById('clientPhoneInput').value.trim();
+    const amount = parseFloat(document.getElementById('amountInput').value);
+    const note = document.getElementById('noteInput').value.trim();
+
+    if(!name){ showToast('Entre le nom du client'); return; }
+    if(!amount || amount <= 0){ showToast('Entre un montant valide'); return; }
+
+    try{
+      let clientId = selectedClientId;
+      if(!clientId){
+        const existing = clients.find(c=>c.name.toLowerCase() === name.toLowerCase());
+        if(existing){
+          clientId = existing.id;
+        }else{
+          const { data, error } = await sb.from('clients').insert({
+            boutique_id: currentUser.id, name, phone
+          }).select().single();
+          if(error) throw error;
+          clients.push(data);
+          clientId = data.id;
+        }
+      }
+
+      const { data: debtData, error: debtError } = await sb.from('debts').insert({
+        boutique_id: currentUser.id, client_id: clientId, amount, remaining: amount, note, date: todayISO(), status: 'due'
+      }).select().single();
+      if(debtError) throw debtError;
+      debts.push(debtData);
+
+      closeModal();
+      renderDashboard();
+      showToast('Dette enregistree');
+    }catch(e){
+      showToast('Erreur: ' + e.message);
+    }
+  });
+}
+
+/* ---- Client detail modal ---- */
+function openClientDetail(clientId){
+  const client = clients.find(c=>c.id===clientId);
+  if(!client) return;
+  const root = document.getElementById('modalRoot');
+  const bal = clientBalance(clientId);
+
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="detail-header">
+          <div class="avatar">${initials(client.name)}</div>
+          <div>
+            <div class="modal-title" style="margin-bottom:0;">${escapeHtml(client.name)}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">${client.phone ? escapeHtml(client.phone) : 'Sans numero'}</div>
+          </div>
+        </div>
+        <div class="detail-total ${bal>0?'due':'clear'}">${bal>0 ? fmt(bal) : 'Solde, rien a payer'}</div>
+        <div class="debt-list" id="debtList"></div>
+        <div class="btn-row">
+          <button class="btn-ghost" id="closeDetail">Fermer</button>
+          <button class="btn-primary" id="addForClient">Ajouter une dette</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const debtList = document.getElementById('debtList');
+  const clientDebts = debts.filter(d=>d.client_id===clientId).sort((a,b)=> b.date.localeCompare(a.date));
+  if(clientDebts.length === 0){
+    debtList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);padding:14px 0;">Aucune dette enregistree.</p>';
+  }else{
+    clientDebts.forEach(d=>{
+      const item = document.createElement('div');
+      item.className = 'debt-item';
+      item.innerHTML = `
+        <div class="d-left">
+          <div class="debt-date">${formatDate(d.date)}</div>
+          <div class="debt-note">${d.note ? escapeHtml(d.note) : 'Dette'}</div>
+        </div>
+        <div style="display:flex;align-items:center;">
+          <div class="debt-amount">${fmt(d.remaining)}</div>
+          ${Number(d.remaining) > 0 ? `<button class="btn-mark" data-id="${d.id}">Marquer paye</button>` : `<span class="stamp-paid">Solde</span>`}
+        </div>
+      `;
+      debtList.appendChild(item);
+    });
+  }
+
+  document.querySelectorAll('.btn-mark').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      try{
+        const { error } = await sb.from('debts').update({ remaining: 0, status: 'paid' }).eq('id', btn.dataset.id);
+        if(error) throw error;
+        const debt = debts.find(d=>d.id===btn.dataset.id);
+        if(debt){ debt.remaining = 0; debt.status = 'paid'; }
+        renderDashboard();
+        openClientDetail(clientId);
+        showToast('Marque comme paye');
+      }catch(e){
+        showToast('Erreur: ' + e.message);
+      }
+    });
+  });
+
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('closeDetail').addEventListener('click', closeModal);
+  document.getElementById('addForClient').addEventListener('click', ()=>{ closeModal(); openAddDebtModal(); });
+}
+
+function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
+
+/* ---- Init ---- */
+async function init(){
+  setAuthMode('login');
+  document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSubmit);
+  document.getElementById('switchModeBtn').addEventListener('click', ()=> setAuthMode(authMode === 'login' ? 'signup' : 'login'));
+  document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  document.getElementById('addBtn').addEventListener('click', openAddDebtModal);
+  document.getElementById('searchInput').addEventListener('input', renderDashboard);
+
+  const { data: { session } } = await sb.auth.getSession();
+  document.getElementById('loading').classList.add('hidden');
+  if(session){
+    await loadEverything();
+  }else{
+    document.getElementById('auth').classList.remove('hidden');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
