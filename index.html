@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carnet Digital</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Carnet Digital">
+<meta name="theme-color" content="#1B2A4A">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -102,6 +108,10 @@
   .toast{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:var(--indigo-deep);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:40;opacity:0;transition:opacity 0.2s;}
   .toast.show{opacity:1;}
   #loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--ink-soft);font-size:13px;}
+  .sub-banner{margin:14px 20px 0;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.5;display:flex;align-items:flex-start;gap:10px;}
+  .sub-banner.warn{background:#FCEBEF;border:1px solid var(--gold);color:var(--gold-deep);}
+  .sub-banner.danger{background:#F8E6E5;border:1px solid var(--rouge);color:#7A2B2B;}
+  .sub-banner b{display:block;margin-bottom:2px;}
 </style>
 </head>
 <body>
@@ -144,6 +154,7 @@
         <div class="total-sub" id="totalSub">0 client</div>
       </div>
     </header>
+    <div id="subBannerWrap"></div>
     <div id="searchwrap"><input type="text" id="searchInput" placeholder="Rechercher un client"></div>
     <div id="clientlist"></div>
     <button class="fab" id="addBtn" aria-label="Ajouter une dette">+</button>
@@ -162,6 +173,7 @@
 const SUPABASE_URL = "https://vwrsqqlbarpevnnvxvxb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_vtLZtmZX0Wumo2C0iI_vXw_aIIvfsVr";
 const EMAIL_DOMAIN = "@carnetdigital.app";
+const RENEWAL_PHONE = "76 204 68 65";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -278,6 +290,31 @@ async function loadEverything(){
   renderDashboard();
 }
 
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const today = new Date(todayISO() + 'T00:00:00');
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function renderSubBanner(){
+  const wrap = document.getElementById('subBannerWrap');
+  const days = daysUntil(profile.subscription_expiry);
+  if(days === null || days > 5){
+    wrap.innerHTML = '';
+    return;
+  }
+  if(days > 0){
+    wrap.innerHTML = `<div class="sub-banner warn">
+      <div><b>Abonnement bientot termine</b>Il te reste ${days} jour${days>1?'s':''}. Envoie 2000F via Wave ou Orange Money au ${RENEWAL_PHONE}, puis previens-moi pour renouveler.</div>
+    </div>`;
+  }else{
+    wrap.innerHTML = `<div class="sub-banner danger">
+      <div><b>Abonnement expire</b>Envoie 2000F via Wave ou Orange Money au ${RENEWAL_PHONE} pour continuer a utiliser Carnet Digital.</div>
+    </div>`;
+  }
+}
+
 function clientBalance(clientId){
   return debts.filter(d=>d.client_id===clientId).reduce((s,d)=>s+Number(d.remaining),0);
 }
@@ -289,6 +326,7 @@ function lastActivity(clientId){
 
 function renderDashboard(){
   document.getElementById('shopNameLabel').textContent = profile.boutique_name;
+  renderSubBanner();
   const total = debts.reduce((s,d)=>s+Number(d.remaining),0);
   document.getElementById('totalAmount').textContent = fmt(total);
   const activeClients = clients.filter(c=>clientBalance(c.id) > 0).length;
