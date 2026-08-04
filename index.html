@@ -188,6 +188,7 @@ let profile = null;
 let clients = [];
 let debts = [];
 let authMode = 'login';
+let subscriptionExpired = false;
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function fmt(n){ return Math.round(n).toLocaleString('fr-FR') + ' F'; }
@@ -306,6 +307,7 @@ function daysUntil(dateStr){
 function renderSubBanner(){
   const wrap = document.getElementById('subBannerWrap');
   const days = daysUntil(profile.subscription_expiry);
+  subscriptionExpired = (days !== null && days <= 0);
   if(days === null || days > 5){
     wrap.innerHTML = '';
     return;
@@ -333,6 +335,7 @@ function lastActivity(clientId){
 function renderDashboard(){
   document.getElementById('shopNameLabel').textContent = profile.boutique_name;
   renderSubBanner();
+  document.getElementById('addBtn').style.opacity = subscriptionExpired ? '0.4' : '1';
   const total = debts.reduce((s,d)=>s+Number(d.remaining),0);
   document.getElementById('totalAmount').textContent = fmt(total);
   const activeClients = clients.filter(c=>clientBalance(c.id) > 0).length;
@@ -381,6 +384,10 @@ function renderDashboard(){
 
 /* ---- Add debt modal ---- */
 function openAddDebtModal(){
+  if(subscriptionExpired){
+    showToast('Abonnement expire. Renouvelle via Wave/OM au ' + RENEWAL_PHONE + ' pour continuer.');
+    return;
+  }
   const root = document.getElementById('modalRoot');
   root.innerHTML = `
     <div class="modal-overlay" id="overlay">
