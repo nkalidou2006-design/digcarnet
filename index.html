@@ -105,6 +105,8 @@
   .debt-amount{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;margin-right:10px;}
   .stamp-paid{font-size:10px;font-weight:700;color:var(--vert);border:1px solid var(--vert);border-radius:4px;padding:2px 6px;text-transform:uppercase;letter-spacing:0.04em;transform:rotate(-4deg);display:inline-block;}
   .btn-mark{font-size:12px;font-weight:600;color:var(--indigo);border:1px solid var(--indigo);border-radius:8px;padding:6px 10px;white-space:nowrap;}
+  .btn-sms{width:100%;margin-top:14px;padding:13px;border-radius:10px;border:1px solid var(--gold-deep);color:var(--gold-deep);font-weight:600;font-size:14px;text-align:center;background:#FBF3E3;}
+  .btn-sms:disabled{opacity:0.5;}
   .toast{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:var(--indigo-deep);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:40;opacity:0;transition:opacity 0.2s;}
   .toast.show{opacity:1;}
   #loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--ink-soft);font-size:13px;}
@@ -174,6 +176,7 @@ const SUPABASE_URL = "https://vwrsqqlbarpevnnvxvxb.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_vtLZtmZX0Wumo2C0iI_vXw_aIIvfsVr";
 const EMAIL_DOMAIN = "@carnetdigital.app";
 const RENEWAL_PHONE = "76 204 68 65";
+const APP_SECRET = "sv6tnQZqAZuG_GB3bedPXY78MtyqTDD0";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -485,6 +488,7 @@ function openClientDetail(clientId){
         </div>
         <div class="detail-total ${bal>0?'due':'clear'}">${bal>0 ? fmt(bal) : 'Solde, rien a payer'}</div>
         <div class="debt-list" id="debtList"></div>
+        ${bal > 0 && client.phone ? '<button class="btn-sms" id="sendSmsBtn">Envoyer un rappel SMS</button>' : ''}
         <div class="btn-row">
           <button class="btn-ghost" id="closeDetail">Fermer</button>
           <button class="btn-primary" id="addForClient">Ajouter une dette</button>
@@ -530,6 +534,33 @@ function openClientDetail(clientId){
       }
     });
   });
+
+  const smsBtn = document.getElementById('sendSmsBtn');
+  if(smsBtn){
+    smsBtn.addEventListener('click', async ()=>{
+      smsBtn.disabled = true;
+      smsBtn.textContent = 'Envoi en cours...';
+      try{
+        const message = `Bonjour ${client.name}, tu dois ${fmt(bal)} a ${profile.boutique_name}. Merci de passer regler des que possible.`;
+        const resp = await fetch('/api/send-sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: client.phone, message, appSecret: APP_SECRET })
+        });
+        const data = await resp.json();
+        if(data.success){
+          showToast('SMS envoye a ' + client.name);
+        }else{
+          showToast('Erreur envoi SMS');
+        }
+      }catch(e){
+        showToast('Erreur: ' + e.message);
+      }finally{
+        smsBtn.disabled = false;
+        smsBtn.textContent = 'Envoyer un rappel SMS';
+      }
+    });
+  }
 
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
   document.getElementById('closeDetail').addEventListener('click', closeModal);
