@@ -34,19 +34,24 @@
   input, textarea{font-family:inherit;}
 
   /* ---- Auth ---- */
-  #auth{flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 28px;background:var(--indigo);color:#fff;}
-  #auth .eyebrow{font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:8px;}
-  #auth h1{font-family:'Fraunces',serif;font-size:30px;font-weight:600;line-height:1.15;margin-bottom:10px;}
-  #auth p{color:#C9D0DE;font-size:14px;line-height:1.5;margin-bottom:24px;}
-  #auth label{font-size:13px;color:#C9D0DE;display:block;margin-bottom:6px;}
-  #auth input{width:100%;padding:14px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:16px;margin-bottom:16px;}
-  #auth input::placeholder{color:#8892A6;}
+  #auth, #completeProfile{flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 28px;background:var(--indigo);color:#fff;}
+  #auth .eyebrow, #completeProfile .eyebrow{font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:8px;}
+  #auth h1, #completeProfile h1{font-family:'Fraunces',serif;font-size:30px;font-weight:600;line-height:1.15;margin-bottom:10px;}
+  #auth p, #completeProfile p{color:#C9D0DE;font-size:14px;line-height:1.5;margin-bottom:24px;}
+  #auth label, #completeProfile label{font-size:13px;color:#C9D0DE;display:block;margin-bottom:6px;}
+  #auth input, #completeProfile input{width:100%;padding:14px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:16px;margin-bottom:16px;}
+  #auth input::placeholder, #completeProfile input::placeholder{color:#8892A6;}
   .btn-primary{background:var(--gold);color:var(--indigo-deep);font-weight:700;font-size:15px;padding:15px;border-radius:10px;width:100%;text-align:center;}
   .btn-primary:active{transform:scale(0.98);}
   .btn-primary:disabled{opacity:0.6;}
   .switch-mode{text-align:center;margin-top:18px;font-size:13px;color:#C9D0DE;}
   .switch-mode button{color:var(--gold);font-weight:600;text-decoration:underline;}
   .auth-error{background:rgba(179,63,63,0.2);border:1px solid var(--rouge);color:#F6C9C9;font-size:13px;padding:10px 12px;border-radius:8px;margin-bottom:16px;}
+  .auth-divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:#8892A6;font-size:12px;}
+  .auth-divider::before, .auth-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.15);}
+  .btn-google{width:100%;padding:14px;border-radius:10px;background:#fff;color:var(--indigo-deep);font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center;gap:10px;}
+  .forgot-link{text-align:center;margin-top:14px;font-size:12px;}
+  .forgot-link button{color:#C9D0DE;text-decoration:underline;}
 
   /* ---- Dashboard (identique au prototype) ---- */
   #dashboard{flex:1;display:flex;flex-direction:column;}
@@ -151,10 +156,30 @@
     <label for="pinInput">Code PIN (6 chiffres)</label>
     <input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="******">
     <button class="btn-primary" id="authSubmitBtn">Se connecter</button>
+    <div class="forgot-link">
+      <button id="forgotPinBtn">Code PIN oublie ?</button>
+    </div>
+    <div class="auth-divider">ou</div>
+    <button class="btn-google" id="googleBtn">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.2 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.2 29.5 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.4 0 10.3-2.1 14-5.5l-6.5-5.5c-2 1.5-4.6 2.4-7.5 2.4-5.3 0-9.7-3.4-11.3-8.1l-6.6 5.1C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.5 5.5C39.9 37 44 31.4 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+      Continuer avec Google
+    </button>
     <div class="switch-mode">
       <span id="switchText">Pas encore de compte ?</span>
       <button id="switchModeBtn">Creer un compte</button>
     </div>
+  </div>
+
+  <div id="completeProfile" class="hidden">
+    <div class="eyebrow">Presque termine</div>
+    <h1>Complete ton profil</h1>
+    <p>Encore deux infos pour finaliser ton compte Sama Carnet.</p>
+    <div id="completeProfileError" class="auth-error hidden"></div>
+    <label for="cpBoutiqueInput">Nom de votre commerce</label>
+    <input id="cpBoutiqueInput" type="text" placeholder="Ex: Boutique Fallou, Salon Awa">
+    <label for="cpPhoneInput">Numero de telephone</label>
+    <input id="cpPhoneInput" type="tel" placeholder="77 123 45 67">
+    <button class="btn-primary" id="cpSubmitBtn">Continuer</button>
   </div>
 
   <div id="dashboard" class="hidden">
@@ -162,6 +187,7 @@
       <div class="row">
         <div>
           <div class="shopname" id="shopNameLabel">Ma boutique</div>
+          <a class="logout-link" id="changePinLink">Changer mon code PIN</a> ·
           <a class="logout-link" id="logoutBtn">Se deconnecter</a>
         </div>
         <div class="stamp">SAMA</div>
@@ -310,6 +336,15 @@ async function handleAuthSubmit(){
   }
 }
 
+async function handleGoogleLogin(){
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google' });
+  if(error) showAuthError(error.message);
+}
+
+function handleForgotPin(){
+  showToast('Contacte le support (WhatsApp) pour reinitialiser ton code, ou connecte-toi avec Google la prochaine fois.');
+}
+
 async function handleLogout(){
   await sb.auth.signOut();
   currentUser = null; profile = null; clients = []; debts = [];
@@ -324,6 +359,12 @@ async function loadEverything(){
   currentUser = user;
 
   const { data: profileData } = await sb.from('profiles').select('*').eq('id', user.id).single();
+
+  if(!profileData){
+    document.getElementById('auth').classList.add('hidden');
+    document.getElementById('completeProfile').classList.remove('hidden');
+    return;
+  }
   profile = profileData;
 
   const { data: clientsData } = await sb.from('clients').select('*').eq('boutique_id', user.id);
@@ -333,8 +374,35 @@ async function loadEverything(){
   debts = debtsData || [];
 
   document.getElementById('auth').classList.add('hidden');
+  document.getElementById('completeProfile').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
   renderDashboard();
+}
+
+async function handleCompleteProfile(){
+  const boutiqueName = document.getElementById('cpBoutiqueInput').value.trim();
+  const phone = document.getElementById('cpPhoneInput').value.trim();
+  const errEl = document.getElementById('completeProfileError');
+  errEl.classList.add('hidden');
+
+  if(!boutiqueName){ errEl.textContent = 'Entre le nom de ton commerce.'; errEl.classList.remove('hidden'); return; }
+  if(!phone){ errEl.textContent = 'Entre ton numero de telephone.'; errEl.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('cpSubmitBtn');
+  btn.disabled = true;
+  try{
+    const { error } = await sb.from('profiles').insert({
+      id: currentUser.id, boutique_name: boutiqueName, phone
+    });
+    if(error) throw error;
+    showToast('Profil complete');
+    await loadEverything();
+  }catch(e){
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }finally{
+    btn.disabled = false;
+  }
 }
 
 function daysUntil(dateStr){
@@ -413,7 +481,7 @@ function renderDashboard(){
         </div>
       </div>
       <div>
-        <div class="client-amount ${bal>0?'due':'clear'}">${bal>0?fmt(bal):'Solde'}</div>
+        <div class="client-amount ${bal>0?'due':'clear'}">${bal>0?fmt(bal):'Paye'}</div>
         <div class="client-meta">${la ? 'Le ' + formatDate(la) : ''}</div>
       </div>
     `;
@@ -571,7 +639,7 @@ function openClientDetail(clientId){
             <div style="font-size:12px;color:var(--ink-soft);">${client.phone ? escapeHtml(client.phone) : 'Sans numero'}</div>
           </div>
         </div>
-        <div class="detail-total ${bal>0?'due':'clear'}">${bal>0 ? fmt(bal) : 'Solde, rien a payer'}</div>
+        <div class="detail-total ${bal>0?'due':'clear'}">${bal>0 ? fmt(bal) : 'Paye, rien a payer'}</div>
         <div class="debt-tabs" id="debtTabs">
           <button class="debt-tab active" data-tab="current">En cours</button>
           <button class="debt-tab" data-tab="history">Historique</button>
@@ -582,9 +650,26 @@ function openClientDetail(clientId){
           <button class="btn-ghost" id="closeDetail">Fermer</button>
           <button class="btn-primary" id="addForClient">Ajouter une dette</button>
         </div>
+        <button class="link-btn danger" id="deleteClientBtn" style="margin-top:16px;display:block;text-align:center;width:100%;">Supprimer ce client et tout son historique</button>
       </div>
     </div>
   `;
+
+  document.getElementById('deleteClientBtn').addEventListener('click', async ()=>{
+    const ok = confirm(`Supprimer ${client.name} et toutes ses dettes (en cours et historique) ? Cette action est definitive.`);
+    if(!ok) return;
+    try{
+      const { error } = await sb.from('clients').delete().eq('id', clientId);
+      if(error) throw error;
+      clients = clients.filter(c=>c.id !== clientId);
+      debts = debts.filter(d=>d.client_id !== clientId);
+      closeModal();
+      renderDashboard();
+      showToast('Client supprime');
+    }catch(e){
+      showToast('Erreur: ' + e.message);
+    }
+  });
 
   let activeTab = 'current';
   function renderDebtList(){
@@ -611,7 +696,7 @@ function openClientDetail(clientId){
         </div>
         <div style="display:flex;align-items:center;">
           <div class="debt-amount">${activeTab === 'current' ? fmt(d.remaining) : fmt(d.amount)}</div>
-          ${Number(d.remaining) > 0 ? `<button class="btn-mark" data-id="${d.id}">Marquer paye</button>` : `<span class="stamp-paid">Solde</span>`}
+          ${Number(d.remaining) > 0 ? `<button class="btn-mark" data-id="${d.id}">Marquer paye</button>` : `<span class="stamp-paid">Paye</span>`}
         </div>
       `;
       debtList.appendChild(item);
@@ -788,6 +873,41 @@ function openEditDebtModal(debtId, clientId){
   });
 }
 
+/* ---- Change PIN modal ---- */
+function openChangePinModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Changer mon code PIN</div>
+        <div class="field"><label>Nouveau code PIN (6 chiffres)</label><input type="password" inputmode="numeric" maxlength="6" id="newPinInput" placeholder="******"></div>
+        <div class="field"><label>Confirme le nouveau code</label><input type="password" inputmode="numeric" maxlength="6" id="confirmPinInput" placeholder="******"></div>
+        <div class="btn-row">
+          <button class="btn-ghost" id="cancelPin">Annuler</button>
+          <button class="btn-primary" id="confirmPin">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('cancelPin').addEventListener('click', closeModal);
+  document.getElementById('confirmPin').addEventListener('click', async ()=>{
+    const newPin = document.getElementById('newPinInput').value.trim();
+    const confirmPin = document.getElementById('confirmPinInput').value.trim();
+    if(!/^\d{6}$/.test(newPin)){ showToast('Le code doit contenir 6 chiffres'); return; }
+    if(newPin !== confirmPin){ showToast('Les deux codes ne correspondent pas'); return; }
+    try{
+      const { error } = await sb.auth.updateUser({ password: newPin });
+      if(error) throw error;
+      closeModal();
+      showToast('Code PIN mis a jour');
+    }catch(e){
+      showToast('Erreur: ' + e.message);
+    }
+  });
+}
+
 function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
 
 /* ---- Init ---- */
@@ -795,7 +915,11 @@ async function init(){
   setAuthMode('login');
   document.getElementById('authSubmitBtn').addEventListener('click', handleAuthSubmit);
   document.getElementById('switchModeBtn').addEventListener('click', ()=> setAuthMode(authMode === 'login' ? 'signup' : 'login'));
+  document.getElementById('googleBtn').addEventListener('click', handleGoogleLogin);
+  document.getElementById('forgotPinBtn').addEventListener('click', handleForgotPin);
+  document.getElementById('cpSubmitBtn').addEventListener('click', handleCompleteProfile);
   document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  document.getElementById('changePinLink').addEventListener('click', openChangePinModal);
   document.getElementById('addBtn').addEventListener('click', openAddDebtModal);
   document.getElementById('searchInput').addEventListener('input', renderDashboard);
 
