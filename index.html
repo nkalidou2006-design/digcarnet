@@ -28,7 +28,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:'Inter',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;justify-content:center;}
-  #app{width:100%;max-width:440px;min-height:100vh;background:var(--paper);position:relative;display:flex;flex-direction:column;}
+  #app{width:100%;max-width:440px;height:100vh;background:var(--paper);position:relative;display:flex;flex-direction:column;overflow:hidden;}
   .hidden{display:none !important;}
   button{font-family:inherit;cursor:pointer;border:none;background:none;}
   input, textarea{font-family:inherit;}
@@ -93,15 +93,28 @@
   .existing-client-pick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
   .pick-chip{padding:8px 12px;border-radius:20px;border:1px solid var(--paper-line);font-size:13px;background:#fff;}
   .pick-chip.active{background:var(--indigo);color:#fff;border-color:var(--indigo);}
+  .product-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;}
+  .product-row input.p-name{flex:2;padding:11px 12px;border-radius:10px;border:1px solid var(--paper-line);background:#fff;font-size:14px;}
+  .product-row input.p-price{flex:1;padding:11px 12px;border-radius:10px;border:1px solid var(--paper-line);background:#fff;font-size:14px;}
+  .product-row .p-remove{color:var(--rouge);font-size:18px;padding:0 4px;flex-shrink:0;}
+  .add-product-link{font-size:13px;color:var(--indigo);text-decoration:underline;font-weight:600;margin-bottom:16px;display:inline-block;}
+  .product-total{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--paper-line);margin-bottom:8px;font-weight:600;}
+  .product-total .amt{font-family:'Fraunces',serif;font-size:20px;color:var(--indigo);}
   .detail-header{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
   .detail-total{font-family:'Fraunces',serif;font-size:30px;font-weight:600;margin:14px 0 4px;font-variant-numeric:tabular-nums;}
   .detail-total.clear{color:var(--vert);}
   .detail-total.due{color:var(--rouge);}
   .debt-list{margin-top:16px;border-top:1px solid var(--paper-line);}
+  .debt-tabs{display:flex;gap:8px;margin-top:16px;}
+  .debt-tab{flex:1;padding:9px;border-radius:8px;border:1px solid var(--paper-line);font-size:13px;font-weight:600;color:var(--ink-soft);background:#fff;text-align:center;}
+  .debt-tab.active{background:var(--indigo);color:#fff;border-color:var(--indigo);}
   .debt-item{padding:12px 0;border-bottom:1px solid var(--paper-line);display:flex;justify-content:space-between;align-items:center;}
   .debt-item .d-left{flex:1;}
   .debt-date{font-size:11px;color:var(--ink-soft);margin-bottom:2px;}
   .debt-note{font-size:13px;color:var(--ink);}
+  .item-lines{margin-bottom:2px;}
+  .item-line{display:flex;justify-content:space-between;font-size:13px;color:var(--ink);gap:12px;max-width:180px;}
+  .item-line span:first-child{color:var(--ink-soft);}
   .debt-amount{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;margin-right:10px;}
   .stamp-paid{font-size:10px;font-weight:700;color:var(--vert);border:1px solid var(--vert);border-radius:4px;padding:2px 6px;text-transform:uppercase;letter-spacing:0.04em;transform:rotate(-4deg);display:inline-block;}
   .btn-mark{font-size:12px;font-weight:600;color:var(--indigo);border:1px solid var(--indigo);border-radius:8px;padding:6px 10px;white-space:nowrap;}
@@ -214,6 +227,33 @@ function phoneToEmail(phone){
   return phone.replace(/\s+/g,'') + EMAIL_DOMAIN;
 }
 
+/* ---- Gestion des produits detailles d'une dette ---- */
+function parseNoteItems(note){
+  if(!note) return null;
+  try{
+    const parsed = JSON.parse(note);
+    if(Array.isArray(parsed) && parsed.every(i => i && typeof i.name === 'string' && typeof i.price === 'number')){
+      return parsed;
+    }
+  }catch(e){}
+  return null;
+}
+function itemsToNote(items){
+  return JSON.stringify(items);
+}
+function itemsTotal(items){
+  return items.reduce((s,i)=>s+Number(i.price||0), 0);
+}
+function renderDebtContent(note){
+  const items = parseNoteItems(note);
+  if(items && items.length){
+    return `<div class="item-lines">${items.map(i=>
+      `<div class="item-line"><span>${escapeHtml(i.name)}</span><span>${fmt(i.price)}</span></div>`
+    ).join('')}</div>`;
+  }
+  return `<div class="debt-note">${note ? escapeHtml(note) : 'Dette'}</div>`;
+}
+
 /* ---- Auth ---- */
 function setAuthMode(mode){
   authMode = mode;
@@ -314,11 +354,11 @@ function renderSubBanner(){
   }
   if(days > 0){
     wrap.innerHTML = `<div class="sub-banner warn">
-      <div><b>Abonnement bientot termine</b>Il te reste ${days} jour${days>1?'s':''}. Envoie 2000F via Wave ou Orange Money au ${RENEWAL_PHONE}, puis previens-moi pour renouveler.</div>
+      <div><b>Abonnement bientot termine</b>Il te reste ${days} jour${days>1?'s':''}. Tu peux renouveler quand tu veux avec 2000F via Wave ou Orange Money au ${RENEWAL_PHONE} — merci pour ta confiance !</div>
     </div>`;
   }else{
     wrap.innerHTML = `<div class="sub-banner danger">
-      <div><b>Abonnement expire</b>Envoie 2000F via Wave ou Orange Money au ${RENEWAL_PHONE} pour continuer a utiliser Sama Carnet.</div>
+      <div><b>Abonnement arrive a son terme</b>Pour continuer a profiter de Sama Carnet, tu peux renouveler avec 2000F via Wave ou Orange Money au ${RENEWAL_PHONE}. N'hesite pas a me contacter si besoin.</div>
     </div>`;
   }
 }
@@ -385,7 +425,7 @@ function renderDashboard(){
 /* ---- Add debt modal ---- */
 function openAddDebtModal(){
   if(subscriptionExpired){
-    showToast('Abonnement expire. Renouvelle via Wave/OM au ' + RENEWAL_PHONE + ' pour continuer.');
+    showToast('Pense a renouveler ton abonnement (Wave/OM au ' + RENEWAL_PHONE + ') pour continuer');
     return;
   }
   const root = document.getElementById('modalRoot');
@@ -400,8 +440,12 @@ function openAddDebtModal(){
         </div>
         <div class="field"><label>Nom du client</label><input type="text" id="clientNameInput" placeholder="Ex: Awa Diop"></div>
         <div class="field"><label>Telephone (optionnel)</label><input type="tel" id="clientPhoneInput" placeholder="77 123 45 67"></div>
-        <div class="field"><label>Montant de la dette</label><input type="number" inputmode="numeric" id="amountInput" placeholder="5000"></div>
-        <div class="field"><label>Note (optionnel)</label><textarea id="noteInput" placeholder="Ex: riz + huile"></textarea></div>
+        <div class="field">
+          <label>Produits achetes</label>
+          <div id="productRows"></div>
+          <button type="button" class="add-product-link" id="addProductRow">+ Ajouter un produit</button>
+        </div>
+        <div class="product-total"><span>Total</span><span class="amt" id="productTotalAmt">0 F</span></div>
         <div class="btn-row">
           <button class="btn-ghost" id="cancelAdd">Annuler</button>
           <button class="btn-primary" id="confirmAdd">Enregistrer</button>
@@ -409,6 +453,31 @@ function openAddDebtModal(){
       </div>
     </div>
   `;
+
+  const productRows = document.getElementById('productRows');
+  function addProductRow(name='', price=''){
+    const row = document.createElement('div');
+    row.className = 'product-row';
+    row.innerHTML = `
+      <input type="text" class="p-name" placeholder="Ex: Riz" value="${escapeHtml(name)}">
+      <input type="number" inputmode="numeric" class="p-price" placeholder="Prix" value="${price}">
+      <button type="button" class="p-remove">&times;</button>
+    `;
+    row.querySelector('.p-price').addEventListener('input', updateProductTotal);
+    row.querySelector('.p-remove').addEventListener('click', ()=>{
+      if(productRows.children.length > 1){ row.remove(); updateProductTotal(); }
+    });
+    productRows.appendChild(row);
+  }
+  function updateProductTotal(){
+    let total = 0;
+    productRows.querySelectorAll('.product-row').forEach(row=>{
+      total += parseFloat(row.querySelector('.p-price').value) || 0;
+    });
+    document.getElementById('productTotalAmt').textContent = fmt(total);
+  }
+  addProductRow();
+  document.getElementById('addProductRow').addEventListener('click', ()=>addProductRow());
 
   let selectedClientId = null;
   const chipList = document.getElementById('chipList');
@@ -441,11 +510,17 @@ function openAddDebtModal(){
   document.getElementById('confirmAdd').addEventListener('click', async ()=>{
     const name = document.getElementById('clientNameInput').value.trim();
     const phone = document.getElementById('clientPhoneInput').value.trim();
-    const amount = parseFloat(document.getElementById('amountInput').value);
-    const note = document.getElementById('noteInput').value.trim();
+
+    const items = [];
+    productRows.querySelectorAll('.product-row').forEach(row=>{
+      const pName = row.querySelector('.p-name').value.trim();
+      const pPrice = parseFloat(row.querySelector('.p-price').value);
+      if(pName && pPrice > 0){ items.push({ name: pName, price: pPrice }); }
+    });
+    const amount = itemsTotal(items);
 
     if(!name){ showToast('Entre le nom du client'); return; }
-    if(!amount || amount <= 0){ showToast('Entre un montant valide'); return; }
+    if(items.length === 0 || amount <= 0){ showToast('Ajoute au moins un produit avec un prix'); return; }
 
     try{
       let clientId = selectedClientId;
@@ -464,7 +539,7 @@ function openAddDebtModal(){
       }
 
       const { data: debtData, error: debtError } = await sb.from('debts').insert({
-        boutique_id: currentUser.id, client_id: clientId, amount, remaining: amount, note, date: todayISO(), status: 'due'
+        boutique_id: currentUser.id, client_id: clientId, amount, remaining: amount, note: itemsToNote(items), date: todayISO(), status: 'due'
       }).select().single();
       if(debtError) throw debtError;
       debts.push(debtData);
@@ -497,6 +572,10 @@ function openClientDetail(clientId){
           </div>
         </div>
         <div class="detail-total ${bal>0?'due':'clear'}">${bal>0 ? fmt(bal) : 'Solde, rien a payer'}</div>
+        <div class="debt-tabs" id="debtTabs">
+          <button class="debt-tab active" data-tab="current">En cours</button>
+          <button class="debt-tab" data-tab="history">Historique</button>
+        </div>
         <div class="debt-list" id="debtList"></div>
         ${bal > 0 && client.phone ? '<button class="btn-sms" id="sendSmsBtn">Envoyer un rappel SMS</button>' : ''}
         <div class="btn-row">
@@ -507,70 +586,90 @@ function openClientDetail(clientId){
     </div>
   `;
 
-  const debtList = document.getElementById('debtList');
-  const clientDebts = debts.filter(d=>d.client_id===clientId).sort((a,b)=> b.date.localeCompare(a.date));
-  if(clientDebts.length === 0){
-    debtList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);padding:14px 0;">Aucune dette enregistree.</p>';
-  }else{
+  let activeTab = 'current';
+  function renderDebtList(){
+    const debtList = document.getElementById('debtList');
+    const clientDebts = debts.filter(d=>d.client_id===clientId)
+      .filter(d=> activeTab === 'current' ? Number(d.remaining) > 0 : Number(d.remaining) <= 0)
+      .sort((a,b)=> b.date.localeCompare(a.date));
+    debtList.innerHTML = '';
+    if(clientDebts.length === 0){
+      debtList.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);padding:14px 0;">${activeTab === 'current' ? 'Aucune dette en cours.' : 'Aucune dette payee pour le moment.'}</p>`;
+      return;
+    }
     clientDebts.forEach(d=>{
       const item = document.createElement('div');
       item.className = 'debt-item';
       item.innerHTML = `
         <div class="d-left">
           <div class="debt-date">${formatDate(d.date)}</div>
-          <div class="debt-note">${d.note ? escapeHtml(d.note) : 'Dette'}</div>
+          ${renderDebtContent(d.note)}
           <div class="debt-actions">
             <button class="link-btn" data-edit-id="${d.id}">Modifier</button>
             <button class="link-btn danger" data-delete-id="${d.id}">Supprimer</button>
           </div>
         </div>
         <div style="display:flex;align-items:center;">
-          <div class="debt-amount">${fmt(d.remaining)}</div>
+          <div class="debt-amount">${activeTab === 'current' ? fmt(d.remaining) : fmt(d.amount)}</div>
           ${Number(d.remaining) > 0 ? `<button class="btn-mark" data-id="${d.id}">Marquer paye</button>` : `<span class="stamp-paid">Solde</span>`}
         </div>
       `;
       debtList.appendChild(item);
     });
+    attachDebtItemHandlers();
   }
 
-  document.querySelectorAll('.btn-mark').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      try{
-        const { error } = await sb.from('debts').update({ remaining: 0, status: 'paid' }).eq('id', btn.dataset.id);
-        if(error) throw error;
-        const debt = debts.find(d=>d.id===btn.dataset.id);
-        if(debt){ debt.remaining = 0; debt.status = 'paid'; }
-        renderDashboard();
-        openClientDetail(clientId);
-        showToast('Marque comme paye');
-      }catch(e){
-        showToast('Erreur: ' + e.message);
-      }
+  document.querySelectorAll('.debt-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      activeTab = tab.dataset.tab;
+      document.querySelectorAll('.debt-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      renderDebtList();
     });
   });
 
-  document.querySelectorAll('[data-edit-id]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      openEditDebtModal(btn.dataset.editId, clientId);
-    });
-  });
+  renderDebtList();
 
-  document.querySelectorAll('[data-delete-id]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const ok = confirm('Supprimer cette dette ? Cette action est definitive.');
-      if(!ok) return;
-      try{
-        const { error } = await sb.from('debts').delete().eq('id', btn.dataset.deleteId);
-        if(error) throw error;
-        debts = debts.filter(d=>d.id !== btn.dataset.deleteId);
-        renderDashboard();
-        openClientDetail(clientId);
-        showToast('Dette supprimee');
-      }catch(e){
-        showToast('Erreur: ' + e.message);
-      }
+  function attachDebtItemHandlers(){
+    document.querySelectorAll('.btn-mark').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        try{
+          const { error } = await sb.from('debts').update({ remaining: 0, status: 'paid' }).eq('id', btn.dataset.id);
+          if(error) throw error;
+          const debt = debts.find(d=>d.id===btn.dataset.id);
+          if(debt){ debt.remaining = 0; debt.status = 'paid'; }
+          renderDashboard();
+          openClientDetail(clientId);
+          showToast('Marque comme paye');
+        }catch(e){
+          showToast('Erreur: ' + e.message);
+        }
+      });
     });
-  });
+
+    document.querySelectorAll('[data-edit-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        openEditDebtModal(btn.dataset.editId, clientId);
+      });
+    });
+
+    document.querySelectorAll('[data-delete-id]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const ok = confirm('Supprimer cette dette ? Cette action est definitive.');
+        if(!ok) return;
+        try{
+          const { error } = await sb.from('debts').delete().eq('id', btn.dataset.deleteId);
+          if(error) throw error;
+          debts = debts.filter(d=>d.id !== btn.dataset.deleteId);
+          renderDashboard();
+          openClientDetail(clientId);
+          showToast('Dette supprimee');
+        }catch(e){
+          showToast('Erreur: ' + e.message);
+        }
+      });
+    });
+  }
 
   const smsBtn = document.getElementById('sendSmsBtn');
   if(smsBtn){
@@ -609,14 +708,20 @@ function openEditDebtModal(debtId, clientId){
   const debt = debts.find(d=>d.id===debtId);
   if(!debt) return;
   const root = document.getElementById('modalRoot');
+  const existingItems = parseNoteItems(debt.note) || [{ name: debt.note || 'Dette', price: debt.amount }];
+
   root.innerHTML = `
     <div class="modal-overlay" id="overlay">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">Modifier la dette</div>
-        <div class="field"><label>Montant</label><input type="number" inputmode="numeric" id="editAmountInput" value="${debt.amount}"></div>
+        <div class="field">
+          <label>Produits achetes</label>
+          <div id="editProductRows"></div>
+          <button type="button" class="add-product-link" id="editAddProductRow">+ Ajouter un produit</button>
+        </div>
+        <div class="product-total"><span>Total</span><span class="amt" id="editProductTotalAmt">0 F</span></div>
         <div class="field"><label>Deja rembourse (optionnel)</label><input type="number" inputmode="numeric" id="editRemainingInput" value="${debt.remaining}"></div>
-        <div class="field"><label>Note</label><textarea id="editNoteInput">${escapeHtml(debt.note || '')}</textarea></div>
         <div class="btn-row">
           <button class="btn-ghost" id="cancelEdit">Annuler</button>
           <button class="btn-primary" id="confirmEdit">Enregistrer</button>
@@ -625,19 +730,51 @@ function openEditDebtModal(debtId, clientId){
     </div>
   `;
 
+  const editProductRows = document.getElementById('editProductRows');
+  function addEditProductRow(name='', price=''){
+    const row = document.createElement('div');
+    row.className = 'product-row';
+    row.innerHTML = `
+      <input type="text" class="p-name" placeholder="Ex: Riz" value="${escapeHtml(name)}">
+      <input type="number" inputmode="numeric" class="p-price" placeholder="Prix" value="${price}">
+      <button type="button" class="p-remove">&times;</button>
+    `;
+    row.querySelector('.p-price').addEventListener('input', updateEditTotal);
+    row.querySelector('.p-remove').addEventListener('click', ()=>{
+      if(editProductRows.children.length > 1){ row.remove(); updateEditTotal(); }
+    });
+    editProductRows.appendChild(row);
+  }
+  function updateEditTotal(){
+    let total = 0;
+    editProductRows.querySelectorAll('.product-row').forEach(row=>{
+      total += parseFloat(row.querySelector('.p-price').value) || 0;
+    });
+    document.getElementById('editProductTotalAmt').textContent = fmt(total);
+  }
+  existingItems.forEach(i=>addEditProductRow(i.name, i.price));
+  document.getElementById('editAddProductRow').addEventListener('click', ()=>addEditProductRow());
+  updateEditTotal();
+
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
   document.getElementById('cancelEdit').addEventListener('click', ()=>{ closeModal(); openClientDetail(clientId); });
 
   document.getElementById('confirmEdit').addEventListener('click', async ()=>{
-    const amount = parseFloat(document.getElementById('editAmountInput').value);
+    const items = [];
+    editProductRows.querySelectorAll('.product-row').forEach(row=>{
+      const pName = row.querySelector('.p-name').value.trim();
+      const pPrice = parseFloat(row.querySelector('.p-price').value);
+      if(pName && pPrice > 0){ items.push({ name: pName, price: pPrice }); }
+    });
+    const amount = itemsTotal(items);
     const remaining = parseFloat(document.getElementById('editRemainingInput').value);
-    const note = document.getElementById('editNoteInput').value.trim();
 
-    if(!amount || amount <= 0){ showToast('Entre un montant valide'); return; }
+    if(items.length === 0 || amount <= 0){ showToast('Ajoute au moins un produit avec un prix'); return; }
     if(isNaN(remaining) || remaining < 0){ showToast('Le montant restant n\'est pas valide'); return; }
 
     try{
       const status = remaining <= 0 ? 'paid' : 'due';
+      const note = itemsToNote(items);
       const { error } = await sb.from('debts').update({ amount, remaining, note, status }).eq('id', debtId);
       if(error) throw error;
       debt.amount = amount; debt.remaining = remaining; debt.note = note; debt.status = status;
