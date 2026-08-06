@@ -24,17 +24,18 @@ module.exports = async function handler(req, res) {
   try {
     // Etape 1 : obtenir un jeton d'acces aupres d'Orange
     const basicAuth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-    const tokenResp = await fetch('https://api.orange.com/oauth/v2/token', {
+    const tokenResp = await fetch('https://api.orange.com/oauth/v3/token', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
       },
       body: 'grant_type=client_credentials'
     });
     const tokenData = await tokenResp.json();
     if (!tokenData.access_token) {
-      return res.status(502).json({ error: 'Impossible de s\'authentifier aupres d\'Orange', details: tokenData });
+      return res.status(502).json({ error: 'Impossible de s\'authentifier aupres d\'Orange', httpStatus: tokenResp.status, details: tokenData });
     }
 
     // Etape 2 : nettoyer le numero du client (garder que les chiffres, ajouter indicatif 221 si absent)
