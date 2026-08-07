@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
   :root{
     --indigo:#1B2A4A;
@@ -56,9 +57,18 @@
   /* ---- Dashboard (identique au prototype) ---- */
   #dashboard{flex:1;display:flex;flex-direction:column;}
   header.top{background:var(--indigo);color:#fff;padding:22px 20px 26px;border-radius:0 0 20px 20px;}
-  header.top .row{display:flex;justify-content:space-between;align-items:flex-start;}
-  header.top .shopname{font-size:13px;color:#B7C0D6;font-weight:500;letter-spacing:0.02em;}
-  header.top .stamp{font-size:11px;color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:3px 10px;font-weight:600;background:none;}
+  header.top .row{display:flex;justify-content:space-between;align-items:center;}
+  header.top .shopname{font-size:16px;color:#fff;font-weight:600;letter-spacing:0.01em;}
+  .profile-avatar{width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--indigo-deep);font-family:'Fraunces',serif;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:2px solid rgba(255,255,255,0.25);}
+  .profile-avatar:active{transform:scale(0.95);}
+  .account-menu-item{width:100%;text-align:left;padding:14px 4px;border-bottom:1px solid var(--paper-line);font-size:14px;color:var(--ink);display:flex;align-items:center;gap:12px;}
+  .account-menu-item:last-child{border-bottom:none;}
+  .account-menu-item.danger{color:var(--rouge);}
+  .account-menu-item .icon{width:20px;text-align:center;flex-shrink:0;}
+  .account-header{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--paper-line);}
+  .account-header .profile-avatar{width:48px;height:48px;font-size:18px;border-color:var(--paper-line);}
+  .account-header .name{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:var(--ink);}
+  .account-header .phone{font-size:12px;color:var(--ink-soft);}
   .total-block{margin-top:16px;}
   .total-label{font-size:12px;color:#B7C0D6;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}
   .total-amount{font-family:'Fraunces',serif;font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;}
@@ -185,15 +195,8 @@
   <div id="dashboard" class="hidden">
     <header class="top">
       <div class="row">
-        <div>
-          <div class="shopname" id="shopNameLabel">Ma boutique</div>
-          <a class="logout-link" id="changePinLink">Changer mon code PIN</a> ·
-          <a class="logout-link" id="exportLink">Exporter mes donnees</a> ·
-          <a class="logout-link" id="trashLink">Corbeille</a> ·
-          <a class="logout-link" id="legalLink">Conditions</a> ·
-          <a class="logout-link" id="logoutBtn">Se deconnecter</a>
-        </div>
-        <div class="stamp">SAMA</div>
+        <div class="shopname" id="shopNameLabel">Ma boutique</div>
+        <button class="profile-avatar" id="profileAvatarBtn">M</button>
       </div>
       <div class="total-block">
         <div class="total-label">Total a recouvrer</div>
@@ -448,6 +451,7 @@ function lastActivity(clientId){
 
 function renderDashboard(){
   document.getElementById('shopNameLabel').textContent = profile.boutique_name;
+  document.getElementById('profileAvatarBtn').textContent = initials(profile.boutique_name);
   renderSubBanner();
   document.getElementById('addBtn').style.opacity = subscriptionExpired ? '0.4' : '1';
   const total = debts.reduce((s,d)=>s+Number(d.remaining),0);
@@ -662,7 +666,7 @@ function openClientDetail(clientId){
   `;
 
   document.getElementById('deleteClientBtn').addEventListener('click', async ()=>{
-    const ok = confirm(`Deplacer ${client.name} vers la corbeille ? Tu pourras le restaurer plus tard depuis "Corbeille" dans le menu du haut.`);
+    const ok = await showConfirm(`Deplacer ${client.name} vers la corbeille ? Tu pourras le restaurer plus tard depuis le menu de ton profil.`);
     if(!ok) return;
     try{
       const { error } = await sb.from('clients').update({ deleted_at: new Date().toISOString() }).eq('id', clientId);
@@ -745,7 +749,7 @@ function openClientDetail(clientId){
 
     document.querySelectorAll('[data-delete-id]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
-        const ok = confirm('Supprimer cette dette ? Cette action est definitive.');
+        const ok = await showConfirm('Supprimer cette dette ? Cette action est definitive.');
         if(!ok) return;
         try{
           const { error } = await sb.from('debts').delete().eq('id', btn.dataset.deleteId);
@@ -881,11 +885,30 @@ function openEditDebtModal(debtId, clientId){
 /* ---- Change PIN modal ---- */
 function openChangePinModal(){
   const root = document.getElementById('modalRoot');
+  const isGoogleOnly = !(currentUser.identities || []).some(i => i.provider === 'email');
+
+  if(isGoogleOnly){
+    root.innerHTML = `
+      <div class="modal-overlay" id="overlay">
+        <div class="modal-sheet">
+          <div class="modal-handle"></div>
+          <div class="modal-title">Changer mon code PIN</div>
+          <p style="font-size:14px;color:var(--ink-soft);line-height:1.5;">Tu te connectes avec Google, tu n'as pas de code PIN a gerer. Ta connexion se fait directement via ton compte Google.</p>
+          <div class="btn-row"><button class="btn-ghost" id="cancelPin" style="flex:1;">Fermer</button></div>
+        </div>
+      </div>
+    `;
+    document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+    document.getElementById('cancelPin').addEventListener('click', closeModal);
+    return;
+  }
+
   root.innerHTML = `
     <div class="modal-overlay" id="overlay">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">Changer mon code PIN</div>
+        <div class="field"><label>Code PIN actuel</label><input type="password" inputmode="numeric" maxlength="6" id="currentPinInput" placeholder="******"></div>
         <div class="field"><label>Nouveau code PIN (6 chiffres)</label><input type="password" inputmode="numeric" maxlength="6" id="newPinInput" placeholder="******"></div>
         <div class="field"><label>Confirme le nouveau code</label><input type="password" inputmode="numeric" maxlength="6" id="confirmPinInput" placeholder="******"></div>
         <div class="btn-row">
@@ -898,11 +921,20 @@ function openChangePinModal(){
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
   document.getElementById('cancelPin').addEventListener('click', closeModal);
   document.getElementById('confirmPin').addEventListener('click', async ()=>{
+    const currentPin = document.getElementById('currentPinInput').value.trim();
     const newPin = document.getElementById('newPinInput').value.trim();
     const confirmPin = document.getElementById('confirmPinInput').value.trim();
-    if(!/^\d{6}$/.test(newPin)){ showToast('Le code doit contenir 6 chiffres'); return; }
-    if(newPin !== confirmPin){ showToast('Les deux codes ne correspondent pas'); return; }
+    if(!/^\d{6}$/.test(currentPin)){ showToast('Entre ton code actuel (6 chiffres)'); return; }
+    if(!/^\d{6}$/.test(newPin)){ showToast('Le nouveau code doit contenir 6 chiffres'); return; }
+    if(newPin !== confirmPin){ showToast('Les deux nouveaux codes ne correspondent pas'); return; }
     try{
+      // Etape 1 : verifier que le code actuel est correct avant de changer quoi que ce soit
+      const { error: verifyError } = await sb.auth.signInWithPassword({
+        email: currentUser.email, password: currentPin
+      });
+      if(verifyError){ showToast('Ton code actuel est incorrect'); return; }
+
+      // Etape 2 : le code actuel est confirme, on peut mettre a jour
       const { error } = await sb.auth.updateUser({ password: newPin });
       if(error) throw error;
       closeModal();
@@ -913,7 +945,58 @@ function openChangePinModal(){
   });
 }
 
-/* ---- Corbeille ---- */
+/* ---- Menu de compte ---- */
+function openAccountMenu(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="account-header">
+          <div class="profile-avatar">${initials(profile.boutique_name)}</div>
+          <div>
+            <div class="name">${escapeHtml(profile.boutique_name)}</div>
+            <div class="phone">${profile.phone ? escapeHtml(profile.phone) : ''}</div>
+          </div>
+        </div>
+        <button class="account-menu-item" id="menuChangePin"><span class="icon">&#128273;</span> Changer mon code PIN</button>
+        <button class="account-menu-item" id="menuExport"><span class="icon">&#11015;&#65039;</span> Exporter mes donnees (PDF)</button>
+        <button class="account-menu-item" id="menuTrash"><span class="icon">&#128465;&#65039;</span> Corbeille</button>
+        <button class="account-menu-item" id="menuLegal"><span class="icon">&#128196;</span> Conditions et confidentialite</button>
+        <button class="account-menu-item danger" id="menuLogout"><span class="icon">&#128682;</span> Se deconnecter</button>
+        <div class="btn-row"><button class="btn-ghost" id="closeAccountMenu" style="flex:1;">Fermer</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('closeAccountMenu').addEventListener('click', closeModal);
+  document.getElementById('menuChangePin').addEventListener('click', ()=>{ closeModal(); openChangePinModal(); });
+  document.getElementById('menuExport').addEventListener('click', ()=>{ closeModal(); handleExport(); });
+  document.getElementById('menuTrash').addEventListener('click', ()=>{ closeModal(); openTrashModal(); });
+  document.getElementById('menuLegal').addEventListener('click', ()=>{ closeModal(); openLegalModal(); });
+  document.getElementById('menuLogout').addEventListener('click', ()=>{ closeModal(); handleLogout(); });
+}
+
+/* ---- Confirmation personnalisee (fiable sur mobile/PWA, contrairement a confirm() natif) ---- */
+function showConfirm(message){
+  return new Promise((resolve)=>{
+    const root = document.getElementById('modalRoot');
+    root.innerHTML = `
+      <div class="modal-overlay" id="overlay">
+        <div class="modal-sheet">
+          <div class="modal-handle"></div>
+          <p style="font-size:14px;color:var(--ink);line-height:1.5;margin-bottom:18px;">${escapeHtml(message)}</p>
+          <div class="btn-row">
+            <button class="btn-ghost" id="confirmNo">Annuler</button>
+            <button class="btn-primary" id="confirmYes">Confirmer</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('confirmNo').addEventListener('click', ()=>{ closeModal(); resolve(false); });
+    document.getElementById('confirmYes').addEventListener('click', ()=>{ closeModal(); resolve(true); });
+  });
+}
 async function openTrashModal(){
   const root = document.getElementById('modalRoot');
   root.innerHTML = `
@@ -967,31 +1050,74 @@ async function openTrashModal(){
   });
 }
 
-/* ---- Export des donnees ---- */
+/* ---- Export des donnees (PDF) ---- */
 function handleExport(){
-  let text = `Export Sama Carnet - ${profile.boutique_name}\nDate export : ${new Date().toLocaleDateString('fr-FR')}\n\n`;
-  clients.forEach(c=>{
-    const clientDebts = debts.filter(d=>d.client_id === c.id);
-    const bal = clientBalance(c.id);
-    text += `=== ${c.name} (${c.phone || 'sans numero'}) — Solde du : ${fmt(bal)} ===\n`;
-    clientDebts.sort((a,b)=>a.date.localeCompare(b.date)).forEach(d=>{
-      const items = parseNoteItems(d.note);
-      const detail = items ? items.map(i=>`${i.name} (${fmt(i.price)})`).join(', ') : (d.note || 'Dette');
-      text += `  ${formatDate(d.date)} - ${detail} - Total ${fmt(d.amount)} - ${Number(d.remaining) > 0 ? 'Reste ' + fmt(d.remaining) : 'Paye'}\n`;
-    });
-    text += '\n';
-  });
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 15;
+    let y = 20;
 
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `sama-carnet-export-${todayISO()}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Export telecharge');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Sama Carnet - Export', marginX, y);
+    y += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`${profile.boutique_name} - Exporte le ${new Date().toLocaleDateString('fr-FR')}`, marginX, y);
+    y += 10;
+    doc.setDrawColor(220);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 8;
+
+    if(clients.length === 0){
+      doc.setTextColor(80);
+      doc.text('Aucun client enregistre.', marginX, y);
+    }
+
+    clients.forEach(c=>{
+      const clientDebts = debts.filter(d=>d.client_id === c.id).sort((a,b)=>a.date.localeCompare(b.date));
+      const bal = clientBalance(c.id);
+
+      if(y > 270){ doc.addPage(); y = 20; }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(20);
+      doc.text(`${c.name}${c.phone ? '  -  ' + c.phone : ''}`, marginX, y);
+      doc.setTextColor(bal > 0 ? 180 : 60, bal > 0 ? 60 : 120, bal > 0 ? 60 : 90);
+      doc.text(bal > 0 ? `Doit : ${fmt(bal)}` : 'Paye', pageWidth - marginX, y, { align: 'right' });
+      y += 6;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(90);
+
+      if(clientDebts.length === 0){
+        doc.text('  Aucune dette enregistree.', marginX, y);
+        y += 6;
+      }
+
+      clientDebts.forEach(d=>{
+        if(y > 275){ doc.addPage(); y = 20; }
+        const items = parseNoteItems(d.note);
+        const detail = items ? items.map(i=>`${i.name} (${fmt(i.price)})`).join(', ') : (d.note || 'Dette');
+        const status = Number(d.remaining) > 0 ? `Reste ${fmt(d.remaining)}` : 'Paye';
+        const line = `  ${formatDate(d.date)} - ${detail} - Total ${fmt(d.amount)} - ${status}`;
+        const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+        doc.text(wrapped, marginX, y);
+        y += wrapped.length * 5;
+      });
+      y += 6;
+    });
+
+    doc.save(`sama-carnet-export-${todayISO()}.pdf`);
+    showToast('Export PDF telecharge');
+  }catch(e){
+    showToast('Erreur export: ' + e.message);
+  }
 }
 
 /* ---- Conditions et confidentialite ---- */
@@ -1027,11 +1153,7 @@ async function init(){
   document.getElementById('googleBtn').addEventListener('click', handleGoogleLogin);
   document.getElementById('forgotPinBtn').addEventListener('click', handleForgotPin);
   document.getElementById('cpSubmitBtn').addEventListener('click', handleCompleteProfile);
-  document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-  document.getElementById('changePinLink').addEventListener('click', openChangePinModal);
-  document.getElementById('exportLink').addEventListener('click', handleExport);
-  document.getElementById('trashLink').addEventListener('click', openTrashModal);
-  document.getElementById('legalLink').addEventListener('click', openLegalModal);
+  document.getElementById('profileAvatarBtn').addEventListener('click', openAccountMenu);
   document.getElementById('addBtn').addEventListener('click', openAddDebtModal);
   document.getElementById('searchInput').addEventListener('input', renderDashboard);
 
