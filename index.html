@@ -188,6 +188,9 @@
         <div>
           <div class="shopname" id="shopNameLabel">Ma boutique</div>
           <a class="logout-link" id="changePinLink">Changer mon code PIN</a> ·
+          <a class="logout-link" id="exportLink">Exporter mes donnees</a> ·
+          <a class="logout-link" id="trashLink">Corbeille</a> ·
+          <a class="logout-link" id="legalLink">Conditions</a> ·
           <a class="logout-link" id="logoutBtn">Se deconnecter</a>
         </div>
         <div class="stamp">SAMA</div>
@@ -342,7 +345,10 @@ async function handleGoogleLogin(){
 }
 
 function handleForgotPin(){
-  showToast('Contacte le support (WhatsApp) pour reinitialiser ton code, ou connecte-toi avec Google la prochaine fois.');
+  const cleanPhone = RENEWAL_PHONE.replace(/\s+/g,'');
+  const waNumber = cleanPhone.startsWith('221') ? cleanPhone : '221' + cleanPhone;
+  const message = encodeURIComponent("Bonjour, j'ai oublie mon code PIN Sama Carnet, peux-tu m'aider a le reinitialiser ?");
+  window.open(`https://wa.me/${waNumber}?text=${message}`, '_blank');
 }
 
 async function handleLogout(){
@@ -367,7 +373,7 @@ async function loadEverything(){
   }
   profile = profileData;
 
-  const { data: clientsData } = await sb.from('clients').select('*').eq('boutique_id', user.id);
+  const { data: clientsData } = await sb.from('clients').select('*').eq('boutique_id', user.id).is('deleted_at', null);
   clients = clientsData || [];
 
   const { data: debtsData } = await sb.from('debts').select('*').eq('boutique_id', user.id);
@@ -650,22 +656,21 @@ function openClientDetail(clientId){
           <button class="btn-ghost" id="closeDetail">Fermer</button>
           <button class="btn-primary" id="addForClient">Ajouter une dette</button>
         </div>
-        <button class="link-btn danger" id="deleteClientBtn" style="margin-top:16px;display:block;text-align:center;width:100%;">Supprimer ce client et tout son historique</button>
+        <button class="link-btn danger" id="deleteClientBtn" style="margin-top:16px;display:block;text-align:center;width:100%;">Deplacer ce client vers la corbeille</button>
       </div>
     </div>
   `;
 
   document.getElementById('deleteClientBtn').addEventListener('click', async ()=>{
-    const ok = confirm(`Supprimer ${client.name} et toutes ses dettes (en cours et historique) ? Cette action est definitive.`);
+    const ok = confirm(`Deplacer ${client.name} vers la corbeille ? Tu pourras le restaurer plus tard depuis "Corbeille" dans le menu du haut.`);
     if(!ok) return;
     try{
-      const { error } = await sb.from('clients').delete().eq('id', clientId);
+      const { error } = await sb.from('clients').update({ deleted_at: new Date().toISOString() }).eq('id', clientId);
       if(error) throw error;
       clients = clients.filter(c=>c.id !== clientId);
-      debts = debts.filter(d=>d.client_id !== clientId);
       closeModal();
       renderDashboard();
-      showToast('Client supprime');
+      showToast('Client deplace vers la corbeille');
     }catch(e){
       showToast('Erreur: ' + e.message);
     }
@@ -908,6 +913,110 @@ function openChangePinModal(){
   });
 }
 
+/* ---- Corbeille ---- */
+async function openTrashModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Corbeille</div>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Les clients supprimes restent ici. Tu peux les restaurer a tout moment.</p>
+        <div id="trashList"><p style="font-size:13px;color:var(--ink-soft);">Chargement...</p></div>
+        <div class="btn-row"><button class="btn-ghost" id="closeTrash" style="flex:1;">Fermer</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('closeTrash').addEventListener('click', closeModal);
+
+  const { data: trashed, error } = await sb.from('clients').select('*').eq('boutique_id', currentUser.id).not('deleted_at', 'is', null);
+  const trashList = document.getElementById('trashList');
+  if(error){ trashList.innerHTML = '<p style="font-size:13px;color:var(--rouge);">Erreur de chargement.</p>'; return; }
+  if(!trashed || trashed.length === 0){ trashList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">La corbeille est vide.</p>'; return; }
+
+  trashList.innerHTML = '';
+  trashed.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'client-row';
+    row.innerHTML = `
+      <div class="client-info">
+        <div class="avatar">${initials(c.name)}</div>
+        <div>
+          <div class="client-name">${escapeHtml(c.name)}</div>
+          <div class="client-phone">${c.phone ? escapeHtml(c.phone) : 'Sans numero'}</div>
+        </div>
+      </div>
+      <button class="btn-mark" data-restore-id="${c.id}">Restaurer</button>
+    `;
+    trashList.appendChild(row);
+  });
+
+  trashList.querySelectorAll('[data-restore-id]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      try{
+        const { error } = await sb.from('clients').update({ deleted_at: null }).eq('id', btn.dataset.restoreId);
+        if(error) throw error;
+        showToast('Client restaure');
+        closeModal();
+        await loadEverything();
+      }catch(e){
+        showToast('Erreur: ' + e.message);
+      }
+    });
+  });
+}
+
+/* ---- Export des donnees ---- */
+function handleExport(){
+  let text = `Export Sama Carnet - ${profile.boutique_name}\nDate export : ${new Date().toLocaleDateString('fr-FR')}\n\n`;
+  clients.forEach(c=>{
+    const clientDebts = debts.filter(d=>d.client_id === c.id);
+    const bal = clientBalance(c.id);
+    text += `=== ${c.name} (${c.phone || 'sans numero'}) — Solde du : ${fmt(bal)} ===\n`;
+    clientDebts.sort((a,b)=>a.date.localeCompare(b.date)).forEach(d=>{
+      const items = parseNoteItems(d.note);
+      const detail = items ? items.map(i=>`${i.name} (${fmt(i.price)})`).join(', ') : (d.note || 'Dette');
+      text += `  ${formatDate(d.date)} - ${detail} - Total ${fmt(d.amount)} - ${Number(d.remaining) > 0 ? 'Reste ' + fmt(d.remaining) : 'Paye'}\n`;
+    });
+    text += '\n';
+  });
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sama-carnet-export-${todayISO()}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Export telecharge');
+}
+
+/* ---- Conditions et confidentialite ---- */
+function openLegalModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet" style="max-height:80vh;">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Conditions et confidentialite</div>
+        <div style="font-size:13px;color:var(--ink);line-height:1.6;">
+          <p style="margin-bottom:10px;"><b>Ce que Sama Carnet fait avec tes donnees :</b> tes informations (nom du commerce, numero, liste de clients et de dettes) sont stockees de facon securisee et ne sont accessibles qu'a toi. Personne d'autre, y compris d'autres marchands, ne peut voir tes donnees.</p>
+          <p style="margin-bottom:10px;"><b>Tes clients :</b> les informations que tu enregistres sur tes clients (nom, numero, montants dus) restent confidentielles et sont utilisees uniquement pour le suivi de tes dettes et l'envoi de rappels.</p>
+          <p style="margin-bottom:10px;"><b>Abonnement :</b> l'utilisation de Sama Carnet coute 2000 FCFA par mois. Le paiement se fait actuellement par Wave ou Orange Money aupres de l'equipe Sama Carnet.</p>
+          <p style="margin-bottom:10px;"><b>Suppression :</b> tu peux supprimer un client a tout moment ; il reste recuperable dans la Corbeille pendant un temps avant suppression definitive.</p>
+          <p style="margin-bottom:10px;"><b>Contact :</b> pour toute question sur tes donnees ou ce service, contacte l'equipe Sama Carnet directement.</p>
+        </div>
+        <div class="btn-row"><button class="btn-ghost" id="closeLegal" style="flex:1;">Fermer</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('closeLegal').addEventListener('click', closeModal);
+}
+
 function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
 
 /* ---- Init ---- */
@@ -920,6 +1029,9 @@ async function init(){
   document.getElementById('cpSubmitBtn').addEventListener('click', handleCompleteProfile);
   document.getElementById('logoutBtn').addEventListener('click', handleLogout);
   document.getElementById('changePinLink').addEventListener('click', openChangePinModal);
+  document.getElementById('exportLink').addEventListener('click', handleExport);
+  document.getElementById('trashLink').addEventListener('click', openTrashModal);
+  document.getElementById('legalLink').addEventListener('click', openLegalModal);
   document.getElementById('addBtn').addEventListener('click', openAddDebtModal);
   document.getElementById('searchInput').addEventListener('input', renderDashboard);
 
