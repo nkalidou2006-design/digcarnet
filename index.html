@@ -320,6 +320,13 @@ async function handleAuthSubmit(){
 
   try{
     if(authMode === 'signup'){
+      const { data: alreadyExists, error: checkError } = await sb.rpc('phone_exists', { check_phone: phone });
+      if(checkError) throw checkError;
+      if(alreadyExists){
+        showAuthError('Un compte existe deja avec ce numero. Connecte-toi plutot, ou utilise "Continuer avec Google" si tu t\'etais inscrit avec Google.');
+        btn.disabled = false;
+        return;
+      }
       const { data, error } = await sb.auth.signUp({ email, password: pin });
       if(error) throw error;
       const userId = data.user.id;
@@ -379,7 +386,7 @@ async function loadEverything(){
   const { data: clientsData } = await sb.from('clients').select('*').eq('boutique_id', user.id).is('deleted_at', null);
   clients = clientsData || [];
 
-  const { data: debtsData } = await sb.from('debts').select('*').eq('boutique_id', user.id);
+  const { data: debtsData } = await sb.from('debts').select('*').eq('boutique_id', user.id).is('deleted_at', null);
   debts = debtsData || [];
 
   document.getElementById('auth').classList.add('hidden');
@@ -400,6 +407,16 @@ async function handleCompleteProfile(){
   const btn = document.getElementById('cpSubmitBtn');
   btn.disabled = true;
   try{
+    // Verifie qu'un compte n'existe pas deja avec ce numero (evite les doublons phone+PIN / Google)
+    const { data: alreadyExists, error: checkError } = await sb.rpc('phone_exists', { check_phone: phone });
+    if(checkError) throw checkError;
+    if(alreadyExists){
+      errEl.innerHTML = 'Un compte existe deja avec ce numero. Connecte-toi plutot avec ton numero et ton code PIN, ou contacte le support si tu penses que c\'est une erreur.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      return;
+    }
+
     const { error } = await sb.from('profiles').insert({
       id: currentUser.id, boutique_name: boutiqueName, phone
     });
@@ -749,15 +766,15 @@ function openClientDetail(clientId){
 
     document.querySelectorAll('[data-delete-id]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
-        const ok = await showConfirm('Supprimer cette dette ? Cette action est definitive.');
+        const ok = await showConfirm('Deplacer cette dette vers la corbeille ? Tu pourras la restaurer depuis le menu de ton profil.');
         if(!ok) return;
         try{
-          const { error } = await sb.from('debts').delete().eq('id', btn.dataset.deleteId);
+          const { error } = await sb.from('debts').update({ deleted_at: new Date().toISOString() }).eq('id', btn.dataset.deleteId);
           if(error) throw error;
           debts = debts.filter(d=>d.id !== btn.dataset.deleteId);
           renderDashboard();
           openClientDetail(clientId);
-          showToast('Dette supprimee');
+          showToast('Dette deplacee vers la corbeille');
         }catch(e){
           showToast('Erreur: ' + e.message);
         }
@@ -892,14 +909,33 @@ function openChangePinModal(){
       <div class="modal-overlay" id="overlay">
         <div class="modal-sheet">
           <div class="modal-handle"></div>
-          <div class="modal-title">Changer mon code PIN</div>
-          <p style="font-size:14px;color:var(--ink-soft);line-height:1.5;">Tu te connectes avec Google, tu n'as pas de code PIN a gerer. Ta connexion se fait directement via ton compte Google.</p>
-          <div class="btn-row"><button class="btn-ghost" id="cancelPin" style="flex:1;">Fermer</button></div>
+          <div class="modal-title">Ajouter un code PIN</div>
+          <p style="font-size:13px;color:var(--ink-soft);line-height:1.5;margin-bottom:16px;">Tu te connectes avec Google. Tu peux quand meme ajouter un code PIN comme methode de secours : tu pourras ensuite te connecter soit avec Google, soit avec ${escapeHtml(currentUser.email)} et ce code.</p>
+          <div class="field"><label>Nouveau code PIN (6 chiffres)</label><input type="password" inputmode="numeric" maxlength="6" id="newPinInput" placeholder="******"></div>
+          <div class="field"><label>Confirme le nouveau code</label><input type="password" inputmode="numeric" maxlength="6" id="confirmPinInput" placeholder="******"></div>
+          <div class="btn-row">
+            <button class="btn-ghost" id="cancelPin">Annuler</button>
+            <button class="btn-primary" id="confirmPin">Enregistrer</button>
+          </div>
         </div>
       </div>
     `;
     document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
     document.getElementById('cancelPin').addEventListener('click', closeModal);
+    document.getElementById('confirmPin').addEventListener('click', async ()=>{
+      const newPin = document.getElementById('newPinInput').value.trim();
+      const confirmPin = document.getElementById('confirmPinInput').value.trim();
+      if(!/^\d{6}$/.test(newPin)){ showToast('Le code doit contenir 6 chiffres'); return; }
+      if(newPin !== confirmPin){ showToast('Les deux codes ne correspondent pas'); return; }
+      try{
+        const { error } = await sb.auth.updateUser({ password: newPin });
+        if(error) throw error;
+        closeModal();
+        showToast('Code PIN ajoute');
+      }catch(e){
+        showToast('Erreur: ' + e.message);
+      }
+    });
     return;
   }
 
@@ -948,6 +984,8 @@ function openChangePinModal(){
 /* ---- Menu de compte ---- */
 function openAccountMenu(){
   const root = document.getElementById('modalRoot');
+  const isGoogleOnly = !(currentUser.identities || []).some(i => i.provider === 'email');
+  const isGoogleLinked = (currentUser.identities || []).some(i => i.provider === 'google');
   root.innerHTML = `
     <div class="modal-overlay" id="overlay">
       <div class="modal-sheet">
@@ -959,9 +997,11 @@ function openAccountMenu(){
             <div class="phone">${profile.phone ? escapeHtml(profile.phone) : ''}</div>
           </div>
         </div>
-        <button class="account-menu-item" id="menuChangePin"><span class="icon">&#128273;</span> Changer mon code PIN</button>
+        <button class="account-menu-item" id="menuChangePin"><span class="icon">&#128273;</span> ${isGoogleOnly ? 'Ajouter un code PIN de secours' : 'Changer mon code PIN'}</button>
+        ${!isGoogleLinked ? '<button class="account-menu-item" id="menuLinkGoogle"><span class="icon">&#128279;</span> Lier mon compte Google</button>' : ''}
         <button class="account-menu-item" id="menuExport"><span class="icon">&#11015;&#65039;</span> Exporter mes donnees (PDF)</button>
         <button class="account-menu-item" id="menuTrash"><span class="icon">&#128465;&#65039;</span> Corbeille</button>
+        <button class="account-menu-item" id="menuHelp"><span class="icon">&#10067;</span> Aide / Questions frequentes</button>
         <button class="account-menu-item" id="menuLegal"><span class="icon">&#128196;</span> Conditions et confidentialite</button>
         <button class="account-menu-item danger" id="menuLogout"><span class="icon">&#128682;</span> Se deconnecter</button>
         <div class="btn-row"><button class="btn-ghost" id="closeAccountMenu" style="flex:1;">Fermer</button></div>
@@ -973,8 +1013,45 @@ function openAccountMenu(){
   document.getElementById('menuChangePin').addEventListener('click', ()=>{ closeModal(); openChangePinModal(); });
   document.getElementById('menuExport').addEventListener('click', ()=>{ closeModal(); handleExport(); });
   document.getElementById('menuTrash').addEventListener('click', ()=>{ closeModal(); openTrashModal(); });
+  document.getElementById('menuHelp').addEventListener('click', ()=>{ closeModal(); openHelpModal(); });
   document.getElementById('menuLegal').addEventListener('click', ()=>{ closeModal(); openLegalModal(); });
   document.getElementById('menuLogout').addEventListener('click', ()=>{ closeModal(); handleLogout(); });
+  const linkBtn = document.getElementById('menuLinkGoogle');
+  if(linkBtn){
+    linkBtn.addEventListener('click', async ()=>{
+      try{
+        const { error } = await sb.auth.linkIdentity({ provider: 'google' });
+        if(error) throw error;
+      }catch(e){
+        showToast('Erreur: ' + e.message);
+      }
+    });
+  }
+}
+
+/* ---- Aide / FAQ ---- */
+function openHelpModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-sheet" style="max-height:80vh;">
+        <div class="modal-handle"></div>
+        <div class="modal-title">Aide / Questions frequentes</div>
+        <div style="font-size:13px;color:var(--ink);line-height:1.6;">
+          <p style="margin-bottom:14px;"><b>Comment ajouter une dette ?</b><br>Appuie sur le bouton "+" en bas, choisis un client existant ou tape un nouveau nom, ajoute chaque produit avec son prix.</p>
+          <p style="margin-bottom:14px;"><b>Comment renouveler mon abonnement ?</b><br>Envoie 2000F via Wave ou Orange Money au numero affiche dans le bandeau, puis previens l'equipe Sama Carnet pour l'activation.</p>
+          <p style="margin-bottom:14px;"><b>J'ai oublie mon code PIN, que faire ?</b><br>Appuie sur "Code PIN oublie ?" a l'ecran de connexion pour contacter le support par WhatsApp. Si tu t'es connecte avec Google, tu peux aussi simplement te reconnecter avec Google, sans code.</p>
+          <p style="margin-bottom:14px;"><b>J'ai supprime un client par erreur, comment le recuperer ?</b><br>Va dans le menu de ton profil (le rond en haut) puis "Corbeille", et appuie sur "Restaurer".</p>
+          <p style="margin-bottom:14px;"><b>Mes clients recoivent-ils un SMS automatique ?</b><br>Cette fonctionnalite arrive bientot. Pour l'instant, utilise le bouton "Envoyer un rappel SMS" quand il est disponible, ou contacte tes clients directement.</p>
+          <p style="margin-bottom:14px;"><b>Puis-je utiliser l'app sur plusieurs telephones ?</b><br>Oui, connecte-toi simplement avec le meme numero et code (ou le meme compte Google) depuis n'importe quel telephone.</p>
+          <p style="margin-bottom:0;"><b>Une autre question ?</b><br>Contacte l'equipe Sama Carnet directement par WhatsApp.</p>
+        </div>
+        <div class="btn-row"><button class="btn-ghost" id="closeHelp" style="flex:1;">Fermer</button></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
+  document.getElementById('closeHelp').addEventListener('click', closeModal);
 }
 
 /* ---- Confirmation personnalisee (fiable sur mobile/PWA, contrairement a confirm() natif) ---- */
@@ -1004,7 +1081,11 @@ async function openTrashModal(){
       <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">Corbeille</div>
-        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Les clients supprimes restent ici. Tu peux les restaurer a tout moment.</p>
+        <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Les clients et dettes supprimes restent ici. Tu peux les restaurer a tout moment.</p>
+        <div class="debt-tabs" style="margin-top:0;margin-bottom:14px;">
+          <button class="debt-tab active" data-trashtab="clients">Clients</button>
+          <button class="debt-tab" data-trashtab="debts">Dettes</button>
+        </div>
         <div id="trashList"><p style="font-size:13px;color:var(--ink-soft);">Chargement...</p></div>
         <div class="btn-row"><button class="btn-ghost" id="closeTrash" style="flex:1;">Fermer</button></div>
       </div>
@@ -1013,41 +1094,91 @@ async function openTrashModal(){
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') closeModal(); });
   document.getElementById('closeTrash').addEventListener('click', closeModal);
 
-  const { data: trashed, error } = await sb.from('clients').select('*').eq('boutique_id', currentUser.id).not('deleted_at', 'is', null);
+  let trashTab = 'clients';
   const trashList = document.getElementById('trashList');
-  if(error){ trashList.innerHTML = '<p style="font-size:13px;color:var(--rouge);">Erreur de chargement.</p>'; return; }
-  if(!trashed || trashed.length === 0){ trashList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">La corbeille est vide.</p>'; return; }
 
-  trashList.innerHTML = '';
-  trashed.forEach(c=>{
-    const row = document.createElement('div');
-    row.className = 'client-row';
-    row.innerHTML = `
-      <div class="client-info">
-        <div class="avatar">${initials(c.name)}</div>
-        <div>
-          <div class="client-name">${escapeHtml(c.name)}</div>
-          <div class="client-phone">${c.phone ? escapeHtml(c.phone) : 'Sans numero'}</div>
-        </div>
-      </div>
-      <button class="btn-mark" data-restore-id="${c.id}">Restaurer</button>
-    `;
-    trashList.appendChild(row);
-  });
+  async function renderTrash(){
+    trashList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Chargement...</p>';
 
-  trashList.querySelectorAll('[data-restore-id]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      try{
-        const { error } = await sb.from('clients').update({ deleted_at: null }).eq('id', btn.dataset.restoreId);
-        if(error) throw error;
-        showToast('Client restaure');
-        closeModal();
-        await loadEverything();
-      }catch(e){
-        showToast('Erreur: ' + e.message);
-      }
+    if(trashTab === 'clients'){
+      const { data: trashed, error } = await sb.from('clients').select('*').eq('boutique_id', currentUser.id).not('deleted_at', 'is', null);
+      if(error){ trashList.innerHTML = '<p style="font-size:13px;color:var(--rouge);">Erreur de chargement.</p>'; return; }
+      if(!trashed || trashed.length === 0){ trashList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Aucun client dans la corbeille.</p>'; return; }
+      trashList.innerHTML = '';
+      trashed.forEach(c=>{
+        const row = document.createElement('div');
+        row.className = 'client-row';
+        row.innerHTML = `
+          <div class="client-info">
+            <div class="avatar">${initials(c.name)}</div>
+            <div>
+              <div class="client-name">${escapeHtml(c.name)}</div>
+              <div class="client-phone">${c.phone ? escapeHtml(c.phone) : 'Sans numero'}</div>
+            </div>
+          </div>
+          <button class="btn-mark" data-restore-client="${c.id}">Restaurer</button>
+        `;
+        trashList.appendChild(row);
+      });
+      trashList.querySelectorAll('[data-restore-client]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          try{
+            const { error } = await sb.from('clients').update({ deleted_at: null }).eq('id', btn.dataset.restoreClient);
+            if(error) throw error;
+            showToast('Client restaure');
+            closeModal();
+            await loadEverything();
+          }catch(e){
+            showToast('Erreur: ' + e.message);
+          }
+        });
+      });
+    }else{
+      const { data: trashedDebts, error } = await sb.from('debts').select('*, clients(name)').eq('boutique_id', currentUser.id).not('deleted_at', 'is', null);
+      if(error){ trashList.innerHTML = '<p style="font-size:13px;color:var(--rouge);">Erreur de chargement.</p>'; return; }
+      if(!trashedDebts || trashedDebts.length === 0){ trashList.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Aucune dette dans la corbeille.</p>'; return; }
+      trashList.innerHTML = '';
+      trashedDebts.forEach(d=>{
+        const row = document.createElement('div');
+        row.className = 'debt-item';
+        row.innerHTML = `
+          <div class="d-left">
+            <div class="debt-date">${formatDate(d.date)} - ${escapeHtml(d.clients ? d.clients.name : 'Client')}</div>
+            ${renderDebtContent(d.note)}
+          </div>
+          <div style="display:flex;align-items:center;">
+            <div class="debt-amount">${fmt(d.amount)}</div>
+            <button class="btn-mark" data-restore-debt="${d.id}">Restaurer</button>
+          </div>
+        `;
+        trashList.appendChild(row);
+      });
+      trashList.querySelectorAll('[data-restore-debt]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          try{
+            const { error } = await sb.from('debts').update({ deleted_at: null }).eq('id', btn.dataset.restoreDebt);
+            if(error) throw error;
+            showToast('Dette restauree');
+            closeModal();
+            await loadEverything();
+          }catch(e){
+            showToast('Erreur: ' + e.message);
+          }
+        });
+      });
+    }
+  }
+
+  root.querySelectorAll('[data-trashtab]').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      trashTab = tab.dataset.trashtab;
+      root.querySelectorAll('[data-trashtab]').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      renderTrash();
     });
   });
+
+  renderTrash();
 }
 
 /* ---- Export des donnees (PDF) ---- */
